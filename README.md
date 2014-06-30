@@ -2,7 +2,7 @@ footswitch
 ==========
 **a configurable switch for your feet.**
 
-Use a foot switch to send common keyboard codes.
+Use a foot switch to send common keyboard codes, using [v-usb] (http://www.obdev.at/vusb/)
 It currently sends the Right GUI key, that I use to display the [status bar] (http://i3wm.org/docs/userguide.html#_configuring_i3bar) with [i3 window manager] (http://i3wm.org).
 
 
