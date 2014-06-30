@@ -98,13 +98,14 @@ static void buildReport(void) {
         if (buttonState == 0){
 			// if button is not pressed
 		    // 	key = pedalKeyPress;
-			//mod = 0;
-			key = 0;
+			mod = 0;
+			//key = 0;
 		} else {
 			// pressed!
 		    //key = pedalKeyRelease;
-			//mod = winKey;
-			key = winKey;
+			//key = winKey;
+			mod = winKey;
+			key = 0;
     	}
     }
 
