@@ -1,0 +1,4 @@
+- Add commuter so we I can choose what report_descriptor to follow.
+  For one position, pedal will only send a modifier (and no keycodes).
+  For other position(s), pedal would send different combinations of
+  mod + keycode.
