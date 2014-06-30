@@ -33,7 +33,7 @@
 int doModifier = 0;
 static uchar mod = 0;
 
-static uchar reportBuffer[2];   /* buffer for HID reports */
+static uchar reportBuffer;   /* buffer for HID reports */
 static uchar idleRate;
 static uchar reportCount;
 
@@ -43,8 +43,9 @@ static uchar debounceTimeIsOver;
 static uchar pedalKeyPress = 0x30; 
 static uchar pedalKeyRelease = 0x2f;
 
-static uchar winKey = 0xe3;
-static uchar winKey2 = 0xe7;
+static uchar ctlKey = 0xe0;
+static uchar guiKey = 0xe3;
+static uchar guiKey2 = 0xe7;
 
 
 /* ------------------------------------------------------------------------- */
@@ -53,32 +54,38 @@ PROGMEM char usbHidReportDescriptor[USB_CFG_HID_REPORT_DESCRIPTOR_LENGTH] = { /*
     0x05, 0x01,                    // USAGE_PAGE (Generic Desktop)
     0x09, 0x06,                    // USAGE (Keyboard)
     0xa1, 0x01,                    // COLLECTION (Application)
+    0x75, 0x01,                    //   REPORT_SIZE (1)
+    0x95, 0x08,                    //   REPORT_COUNT (8)
     0x05, 0x07,                    //   USAGE_PAGE (Keyboard)
     0x19, 0xe0,                    //   USAGE_MINIMUM (Keyboard LeftControl)
     0x29, 0xe7,                    //   USAGE_MAXIMUM (Keyboard Right GUI)
     0x15, 0x00,                    //   LOGICAL_MINIMUM (0)
     0x25, 0x01,                    //   LOGICAL_MAXIMUM (1)
-    0x75, 0x01,                    //   REPORT_SIZE (1)
-    0x95, 0x08,                    //   REPORT_COUNT (8)
-    0x81, 0x02,                    //   INPUT (Data,Var,Abs)
-    0x95, 0x01,                    //   REPORT_COUNT (1)
-    0x75, 0x08,                    //   REPORT_SIZE (8)
-    0x25, 0x65,                    //   LOGICAL_MAXIMUM (101)
-    0x19, 0x00,                    //   USAGE_MINIMUM (Reserved (no event indicated))
-    0x29, 0x65,                    //   USAGE_MAXIMUM (Keyboard Application)
-    0x81, 0x00,                    //   INPUT (Data,Ary,Abs)
+    0x81, 0x02,                    // INPUT (Data,Var,Abs)
     0xc0                           // END_COLLECTION
 };
 
-/* We use a simplifed keyboard report descriptor which does not support the
- * boot protocol. We don't allow setting status LEDs and we only allow one
- * simultaneous key press (except modifiers). We can therefore use short
- * 2 byte input reports.
- * The report descriptor has been created with usb.org's "HID Descriptor Tool"
- * which can be downloaded from http://www.usb.org/developers/hidpage/.
- * Redundant entries (such as LOGICAL_MINIMUM and USAGE_PAGE) have been omitted
- * for the second INPUT item.
+/* Really minimal ReportDescriptor: only serves for sending modifiers */
+/* 
+ * bit 0 - Left Ctrl
+   bit 1 - Left Shift
+   bit 2 - Left Alt
+   bit 3 - Left GUI or Windows Key
+   bit 4 - Right Ctrl
+   bit 5 - Right Shift
+   bit 6 - Right Alt
+   bit 7 - Right GUI or Windows Key
  */
+
+typedef struct {
+	uint8_t modifier;
+	/*
+	uint8_t reserved;
+	uint8_t keycode[6];
+	*/
+} keyboard_report_t;
+static keyboard_report_t keyboard_report; // sent to PC
+
 static void timerPoll(void) {
 	static unsigned int timerCnt;
 
@@ -92,27 +99,19 @@ static void timerPoll(void) {
 }
 
 static void buildReport(void) {
-    uchar key = 0; //if not changed by the if-statement below, then send an empty report
 
     if(reportCount == 0){
         if (buttonState == 0){
 			// if button is not pressed
-		    // 	key = pedalKeyPress;
-			mod = 0;
-			//key = 0;
+			keyboard_report.modifier = 0;
 		} else {
 			// pressed!
-		    //key = pedalKeyRelease;
-			//key = winKey;
-			mod = winKey;
-			key = 0;
+			// XXX this is right GUI, right???
+			keyboard_report.modifier = 1 << 7;
     	}
     }
 
 	reportCount++;
-
-	reportBuffer[0] = mod;
-	reportBuffer[1] = key;
 }
 
 static void checkButtonChange(void) {
@@ -145,7 +144,7 @@ USB_PUBLIC uchar usbFunctionSetup(uchar data[8]) {
         if(rq->bRequest == USBRQ_HID_GET_REPORT){  /* wValue: ReportType (highbyte), ReportID (lowbyte) */
             /* we only have one report type, so don't look at wValue */
             buildReport();
-            return sizeof(reportBuffer);
+            return sizeof(keyboard_report);
         }else if(rq->bRequest == USBRQ_HID_GET_IDLE){
             usbMsgPtr = &idleRate;
             return 1;
@@ -206,6 +205,9 @@ int main() {
 
 	DDRB = LED_PIN; // LED pin as output
 
+    for(i=0; i<sizeof(keyboard_report); i++) // clear report initially
+        ((uchar *)&keyboard_report)[i] = 0;
+    
     wdt_enable(WDTO_1S); // enable 1s watchdog timer
 
     usbInit();
@@ -227,9 +229,9 @@ int main() {
     while(1) {
         wdt_reset(); // keep the watchdog happy
         usbPoll();
-		if(usbInterruptIsReady() && reportCount < 2){ /* we can send another key */
+		if(usbInterruptIsReady() && reportCount < 1){ /* we can send another key */
 			buildReport();
-			usbSetInterrupt(reportBuffer, sizeof(reportBuffer));
+			usbSetInterrupt((void *)&keyboard_report, sizeof(keyboard_report));
 		}
 		checkButtonChange();
 		timerPoll();
@@ -237,4 +239,3 @@ int main() {
 
     return 0;
 }
-
